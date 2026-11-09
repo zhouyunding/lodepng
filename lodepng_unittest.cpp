@@ -712,6 +712,35 @@ void testGetFilterTypes() {
   ASSERT_EQUALS(1, types[4]);
   ASSERT_EQUALS(1, types[5]);
   ASSERT_EQUALS(1, types[6]);
+
+  // Regression test for issue #235: if the IHDR dimensions of an interlaced
+  // PNG are larger than what the IDAT data actually decompresses to,
+  // getFilterTypesInterlaced must return an error instead of reading out of
+  // bounds of the decompressed buffer.
+  {
+    std::vector<unsigned char> pixels(8 * 8 * 4);
+    for(size_t i = 0; i < pixels.size(); i++) pixels[i] = (unsigned char)(i * 7 + 13);
+    lodepng::State state;
+    state.info_png.interlace_method = 1;
+    std::vector<unsigned char> crafted;
+    ASSERT_NO_PNG_ERROR_MSG(lodepng::encode(crafted, pixels, 8, 8, state), "encode interlaced");
+
+    //green case: the unmodified interlaced PNG yields 7 filter groups
+    std::vector<std::vector<unsigned char> > groups;
+    ASSERT_EQUALS(0, lodepng::getFilterTypesInterlaced(groups, crafted));
+    ASSERT_EQUALS(7, groups.size());
+
+    //red case: inflate IHDR width and height to 6000x5000 while IDAT still
+    //holds the 8x8 image; keep the IHDR CRC valid
+    for(size_t i = 0; i < 4; i++) {
+      crafted[16 + i] = (unsigned char)(6000u >> (8 * (3 - i)));
+      crafted[20 + i] = (unsigned char)(5000u >> (8 * (3 - i)));
+    }
+    lodepng_chunk_generate_crc(&crafted[8]);
+    groups.clear();
+    unsigned error = lodepng::getFilterTypesInterlaced(groups, crafted);
+    ASSERT_TRUE(error != 0);
+  }
 }
 
 //Test LodePNG encoding and decoding the encoded result, using the C++ interface, with interlace

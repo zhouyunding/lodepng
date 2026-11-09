@@ -196,6 +196,9 @@ unsigned getFilterTypesInterlaced(std::vector<std::vector<unsigned char> >& filt
       if(ADAM7_IX[j] >= w || ADAM7_IY[j] >= h) continue;
       size_t linebytes = 1 + lodepng_get_raw_size(w2, 1, &state.info_png.color);
       for(size_t i = 0; i < h2; i++) {
+        /*the decompressed data can be shorter than what the IHDR dimensions
+        imply (e.g. crafted PNG); never read past its end*/
+        if(pos >= data.size()) return 1;
         filterTypes[j].push_back(data[pos]);
         pos += linebytes;
       }
